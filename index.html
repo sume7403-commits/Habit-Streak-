@@ -398,6 +398,9 @@ setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
     onAuthStateChanged,
     signOut
   } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+  import {
+  getFirestore, doc, getDoc, setDoc, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyDk8IZ0z2OcllEvnDStMEjwA_T73XQ-kpQ",
@@ -411,6 +414,7 @@ setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
 
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
+  const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
 
   const header = document.querySelector(".header-right");
@@ -436,11 +440,46 @@ setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
     }
   });
 
-  onAuthStateChanged(auth, (user) => {
+  onAuthStateChanged(auth, async (user) => {
     loginButton.textContent = user
       ? "Sign out · " + (user.displayName || user.email || "Account")
       : "Continue with Google";
     loginButton.title = user?.email || "Sign in with Google";
+
+    if (!user) return;
+
+    try {
+      const profileRef = doc(db, "users", user.uid);
+      const existingProfile = await getDoc(profileRef);
+
+      const profile = {
+        uid: user.uid,
+        displayName: user.displayName || "",
+        email: user.email || "",
+        photoURL: user.photoURL || "",
+        provider: "google.com",
+        updatedAt: serverTimestamp(),
+        lastLoginAt: serverTimestamp()
+      };
+
+      if (!existingProfile.exists()) {
+        profile.createdAt = serverTimestamp();
+      }
+
+      await setDoc(profileRef, profile, { merge: true });
+
+      loginButton.title =
+        "Signed in: " + (user.email || "Google account") + " · profile saved";
+
+    } catch (error) {
+      console.error("HabitStreak profile save failed:", error);
+      loginButton.title = "Profile save failed";
+
+      alert(
+        "Google login worked, but profile saving failed. " +
+        "Check Firestore Rules. Error: " + error.message
+      );
+    }
   });
 </script>
 </body></html>
