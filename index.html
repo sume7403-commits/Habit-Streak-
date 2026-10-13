@@ -317,7 +317,25 @@ allPets.forEach(p => {
     p.access = 'coins'; p.cost = coinPrices.get(key); coinAssigned.add(key);
   } else { p.access = 'premium'; p.cost = null; }
 });
-function persist(){try{localStorage.setItem(STORE_KEY,JSON.stringify({customTasks,completed:[...completed],coins,owned:[...owned],selectedPet,timedTasks,freeTimerUses}));}catch(_){}}
+function persist(silent = false) {
+  const state = {
+    customTasks,
+    completed: [...completed],
+    coins,
+    owned: [...owned],
+    selectedPet,
+    timedTasks,
+    freeTimerUses
+  };
+
+  try {
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  } catch (_) {}
+
+  if (!silent && window.HabitStreakSync) {
+    window.HabitStreakSync.queueSave(state);
+  }
+}
 function showToast(message){const n=$('#toast');n.textContent=message;n.classList.add('show');clearTimeout(toastTimer);toastTimer=setTimeout(()=>n.classList.remove('show'),2300);}
 function syncCoins(){$('#coinBalance').textContent=coins;$('#coinBalanceShop').textContent=coins;$('#ownedCount').textContent=owned.size;}
 function renderTasks(){
@@ -374,7 +392,40 @@ $('#dateChip').textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',mo
 try{if(!localStorage.getItem(STORE_KEY)){const old=JSON.parse(localStorage.getItem('habitstreak-part1-nova-v1')||'{}');if(Array.isArray(old.customTasks))customTasks=old.customTasks;if(Array.isArray(old.completed))completed=new Set(old.completed);let count=completed.size;coins=30+count*5;}}catch(_){}
 if(!allPets.some(p=>p.id===selectedPet)||!owned.has(selectedPet))selectedPet='nova';
 setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
+window.HabitStreakSync = {
+  exportState() {
+    return {
+      customTasks,
+      completed: [...completed],
+      coins,
+      owned: [...owned],
+      selectedPet,
+      timedTasks,
+      freeTimerUses
+    };
+  },
 
+  importState(state) {
+    if (!state || typeof state !== 'object') return;
+
+    if (Array.isArray(state.customTasks)) customTasks = state.customTasks;
+    if (Array.isArray(state.completed)) completed = new Set(state.completed);
+    if (typeof state.coins === 'number') coins = state.coins;
+    if (Array.isArray(state.owned)) owned = new Set(state.owned);
+    if (typeof state.selectedPet === 'string') selectedPet = state.selectedPet;
+    if (Array.isArray(state.timedTasks)) timedTasks = state.timedTasks;
+    if (typeof state.freeTimerUses === 'number') freeTimerUses = state.freeTimerUses;
+
+    persist(true);
+    setActivePet(selectedPet);
+    renderTasks();
+    renderPets();
+    renderTimedTasks();
+  },
+
+  queueSave: null
+};
+  
 </script>
 <style>
   #firebaseGoogleLogin {
@@ -415,6 +466,23 @@ setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
   const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
+    let habitStreakSaveQueue = Promise.resolve();
+
+  window.HabitStreakSync.queueSave = (state) => {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const profileRef = doc(db, "users", user.uid);
+
+    habitStreakSaveQueue = habitStreakSaveQueue
+      .then(() => setDoc(profileRef, {
+        appState: state,
+        appStateUpdatedAt: serverTimestamp()
+      }, { merge: true }))
+      .catch(error => {
+        console.error("HabitStreak cloud save failed:", error);
+      });
+  };
   const provider = new GoogleAuthProvider();
 
   const header = document.querySelector(".header-right");
@@ -451,6 +519,13 @@ setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
     try {
       const profileRef = doc(db, "users", user.uid);
       const existingProfile = await getDoc(profileRef);
+            const cloudState = existingProfile.exists()
+        ? existingProfile.data().appState
+        : null;
+
+      if (cloudState && window.HabitStreakSync?.importState) {
+        window.HabitStreakSync.importState(cloudState);
+      }
 
       const profile = {
         uid: user.uid,
@@ -467,6 +542,15 @@ setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
       }
 
       await setDoc(profileRef, profile, { merge: true });
+            if (
+        !cloudState &&
+        window.HabitStreakSync?.exportState &&
+        window.HabitStreakSync?.queueSave
+      ) {
+        window.HabitStreakSync.queueSave(
+          window.HabitStreakSync.exportState()
+        );
+      }
 
       loginButton.title =
         "Signed in: " + (user.email || "Google account") + " · profile saved";
