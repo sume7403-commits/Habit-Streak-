@@ -356,7 +356,7 @@ function petTouchReaction(kind,target='main'){const active=allPets.find(p=>p.id=
 function petTouchKind(el,event){const svg=el.querySelector('svg');const r=(svg||el).getBoundingClientRect();const x=(event.clientX-r.left)/r.width,y=(event.clientY-r.top)/r.height;return y<.52&&x>.12&&x<.88?'head':y>.55&&y<.79&&x>.34&&x<.66?'belly':'talk';}
 function bindPetTouch(el,target){if(!el||el.dataset.touchBound==='yes')return;el.dataset.touchBound='yes';let start=null,handledAt=0;const react=e=>{if(Date.now()-handledAt<250)return;handledAt=Date.now();const kind=petTouchKind(el,e);if(kind==='head'||kind==='belly')petTouchReaction(kind,target);else petTalk(target);};el.addEventListener('pointerdown',e=>{if(e.button!==undefined&&e.button!==0)return;const kind=petTouchKind(el,e);start={x:e.clientX,y:e.clientY,kind};});el.addEventListener('pointerup',e=>{if(!start)return;const dx=e.clientX-start.x,dy=e.clientY-start.y,moved=Math.hypot(dx,dy)>9,kind=start.kind;start=null;if(moved&&!('ontouchstart'in window))return;handledAt=Date.now();if(kind==='head'||kind==='belly')petTouchReaction(kind,target);else petTalk(target);});el.addEventListener('click',e=>{if(Date.now()-handledAt<350)return;react(e);});}
 function novaTalk(){petTalk('main');}
-function setActivePet(id){selectedPet=id;const p=allPets.find(x=>x.id===id)||originalPet;$('#novaButton').innerHTML=p.svg.includes('<svg class=')?p.svg:p.svg.replace('<svg ','<svg class="pet-svg" ');$('.pet-name').textContent=p.name;$('.pet-title').textContent=p.id==='nova'?'your tiny star with a big heart':p.kind.toLowerCase();$('#petSpeech').textContent=`${p.name} is here with you!`;petTalkIndex=0;persist();if($('#petDetail').hidden)renderPets();else syncCoins();bindMainPetAgain();}
+function setActivePet(id, saveState = true){selectedPet=id;const p=allPets.find(x=>x.id===id)||originalPet;$('#novaButton').innerHTML=p.svg.includes('<svg class=')?p.svg:p.svg.replace('<svg ','<svg class="pet-svg" ');$('.pet-name').textContent=p.name;$('.pet-title').textContent=p.id==='nova'?'your tiny star with a big heart':p.kind.toLowerCase();$('#petSpeech').textContent=`${p.name} is here with you!`;petTalkIndex=0;if(saveState)persist();if($('#petDetail').hidden)renderPets();else syncCoins();bindMainPetAgain();}
 function bindMainPetAgain(){bindPetTouch($('#novaButton'),'main');}
 function goToPage(i){if(i<0||i>1||i===currentPage)return;currentPage=i;$$('.page').forEach((p,n)=>p.classList.toggle('active',n===i));$$('.dot').forEach((d,n)=>{d.classList.toggle('active',n===i);if(n===i)d.setAttribute('aria-current','page');else d.removeAttribute('aria-current');});$('#pageLabel').textContent=labels[i];if(i===1)renderPets();window.scrollTo({top:0,behavior:'smooth'});}
 function fmtTime(value){const d=new Date(value);return Number.isNaN(d.getTime())?'Invalid time':new Intl.DateTimeFormat(undefined,{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}).format(d);}
@@ -417,7 +417,7 @@ window.HabitStreakSync = {
     if (typeof state.freeTimerUses === 'number') freeTimerUses = state.freeTimerUses;
 
     persist(true);
-    setActivePet(selectedPet);
+    setActivePet(selectedPet, false);
     renderTasks();
     renderPets();
     renderTimedTasks();
@@ -450,7 +450,7 @@ window.HabitStreakSync = {
     signOut
   } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
   import {
-  getFirestore, doc, getDoc, setDoc, serverTimestamp
+  getFirestore, doc, getDoc, setDoc, serverTimestamp, onSnapshot
 } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -507,12 +507,17 @@ window.HabitStreakSync = {
       loginButton.disabled = false;
     }
   });
-
+  
+  let stopHabitStreakListener = null;
   onAuthStateChanged(auth, async (user) => {
     loginButton.textContent = user
       ? "Sign out · " + (user.displayName || user.email || "Account")
       : "Continue with Google";
     loginButton.title = user?.email || "Sign in with Google";
+    if (stopHabitStreakListener) {
+  stopHabitStreakListener();
+  stopHabitStreakListener = null;
+}
 
     if (!user) return;
 
@@ -551,7 +556,22 @@ window.HabitStreakSync = {
           window.HabitStreakSync.exportState()
         );
       }
+      
+      stopHabitStreakListener = onSnapshot(
+  profileRef,
+  (snapshot) => {
+    if (!snapshot.exists()) return;
 
+    const latestState = snapshot.data().appState;
+
+    if (latestState && window.HabitStreakSync?.importState) {
+      window.HabitStreakSync.importState(latestState);
+    }
+  },
+  (error) => {
+    console.error("HabitStreak real-time sync failed:", error);
+  }
+);
       loginButton.title =
         "Signed in: " + (user.email || "Google account") + " · profile saved";
 
