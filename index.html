@@ -374,4 +374,74 @@ $('#dateChip').textContent=new Intl.DateTimeFormat(undefined,{weekday:'short',mo
 try{if(!localStorage.getItem(STORE_KEY)){const old=JSON.parse(localStorage.getItem('habitstreak-part1-nova-v1')||'{}');if(Array.isArray(old.customTasks))customTasks=old.customTasks;if(Array.isArray(old.completed))completed=new Set(old.completed);let count=completed.size;coins=30+count*5;}}catch(_){}
 if(!allPets.some(p=>p.id===selectedPet)||!owned.has(selectedPet))selectedPet='nova';
 setActivePet(selectedPet);renderTasks();renderPets();renderTimedTasks();
-</script></body></html>
+
+</script>
+<style>
+  #firebaseGoogleLogin {
+    border: 1px solid #c6a4ff;
+    border-radius: 10px;
+    padding: 8px 12px;
+    background: #291e3a;
+    color: #fff8ff;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+</style>
+<script type="module">
+  import { initializeApp, getApp, getApps } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+  import {
+    getAuth,
+    GoogleAuthProvider,
+    signInWithPopup,
+    onAuthStateChanged,
+    signOut
+  } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyDk8IZ0z2OcllEvnDStMEjwA_T73XQ-kpQ",
+    authDomain: "habit-streak-21856.firebaseapp.com",
+    projectId: "habit-streak-21856",
+    storageBucket: "habit-streak-21856.firebasestorage.app",
+    messagingSenderId: "106652581729",
+    appId: "1:106652581729:web:4b4a8b23e8a68fb50d4f20",
+    measurementId: "G-76130LG7GF"
+  };
+
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const provider = new GoogleAuthProvider();
+
+  const header = document.querySelector(".header-right");
+  const loginButton = document.createElement("button");
+  loginButton.id = "firebaseGoogleLogin";
+  loginButton.textContent = "Continue with Google";
+  loginButton.type = "button";
+  loginButton.setAttribute("aria-label", "Sign in with Google");
+  header.appendChild(loginButton);
+
+  loginButton.addEventListener("click", async () => {
+    loginButton.disabled = true;
+    try {
+      if (auth.currentUser) {
+        await signOut(auth);
+      } else {
+        await signInWithPopup(auth, provider);
+      }
+    } catch (error) {
+      alert("Google Login failed: " + error.message);
+    } finally {
+      loginButton.disabled = false;
+    }
+  });
+
+  onAuthStateChanged(auth, (user) => {
+    loginButton.textContent = user
+      ? "Sign out · " + (user.displayName || user.email || "Account")
+      : "Continue with Google";
+    loginButton.title = user?.email || "Sign in with Google";
+  });
+</script>
+</body></html>
+
