@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HabitStreak | Owner Dashboard</title>
+
+<style>
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #0c0d14;
+  color: #f5f3ff;
+  font-family: Arial, sans-serif;
+}
+
+header {
+  padding: 22px;
+  border-bottom: 1px solid #292a3b;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+header h2 {
+  margin: 0;
+}
+
+header span {
+  color: #b7a1ff;
+}
+
+main {
+  max-width: 1100px;
+  margin: auto;
+  padding: 24px 16px;
+}
+
+.card {
+  background: #151622;
+  border: 1px solid #2a2c40;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 18px;
+}
+
+h1 {
+  font-size: 28px;
+  margin-top: 0;
+}
+
+.muted {
+  color: #a5a6ba;
+  font-size: 14px;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 20px 0;
+}
+
+.stat {
+  background: #10111b;
+  border: 1px solid #292b3d;
+  border-radius: 12px;
+  padding: 16px;
+  overflow-wrap: anywhere;
+}
+
+.stat strong {
+  display: block;
+  font-size: 25px;
+  margin-bottom: 7px;
+}
+
+button {
+  padding: 11px 15px;
+  background: #a994ff;
+  color: #151020;
+  border: none;
+  border-radius: 9px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.6;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  background: #10111b;
+  border: 1px solid #33354b;
+  color: white;
+  border-radius: 9px;
+  margin: 12px 0;
+}
+
+.status {
+  padding: 12px;
+  background: #202131;
+  border-radius: 9px;
+  margin: 15px 0;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: #ff9fae;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 650px;
+}
+
+th, td {
+  text-align: left;
+  padding: 12px;
+  border-bottom: 1px solid #303145;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+th {
+  color: #b7a1ff;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.warning {
+  background: #282219;
+  border: 1px solid #55442a;
+  padding: 13px;
+  border-radius: 10px;
+  color: #f1d5a2;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+@media(max-width: 600px) {
+  .stats {
+    grid-template-columns: 1fr;
+  }
+
+  header {
+    padding: 16px;
+  }
+
+  main {
+    padding: 16px 10px;
+  }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h2>Habit<span>Streak</span> · Owner</h2>
+  <button id="logout" class="hidden">Sign out</button>
+</header>
+
+<main>
+
+<section class="card">
+  <h1>Owner Dashboard</h1>
+  <p class="muted">Private administration panel</p>
+
+  <div id="status" class="status">
+    Connecting to Firebase...
+  </div>
+
+  <div id="loginArea" class="hidden">
+    <button id="login">Continue with Google</button>
+  </div>
+
+  <div id="dashboard" class="hidden">
+
+    <div class="stats">
+      <div class="stat">
+        <strong id="totalUsers">0</strong>
+        <span class="muted">Total users</span>
+      </div>
+
+      <div class="stat">
+        <strong id="premiumUsers">0</strong>
+        <span class="muted">Profiles marked Premium</span>
+      </div>
+
+      <div class="stat">
+        <strong id="loginUsers">0</strong>
+        <span class="muted">Profiles with login dates</span>
+      </div>
+    </div>
+
+    <h2>User Management</h2>
+
+    <input
+      id="search"
+      type="search"
+      placeholder="Search by name, email or UID..."
+    >
+
+    <button id="refresh">Refresh users</button>
+
+    <br><br>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Email</th>
+            <th>UID</th>
+            <th>Premium status</th>
+            <th>Last login</th>
+          </tr>
+        </thead>
+
+        <tbody id="usersBody">
+          <tr>
+            <td colspan="5">No data loaded.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <br>
+
+    <div class="warning">
+      Payment verification and Premium activation are not connected yet.
+      A profile showing Premium does not prove that a payment was verified.
+      This dashboard currently displays user information only.
+    </div>
+
+  </div>
+</section>
+
+</main>
+
+<script type="module">
+
+import {
+  initializeApp
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+
+import {
+  getAuth,
+  GoogleAuthProvider,
+  signInWithPopup,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-auth.js";
+
+import {
+  getFirestore,
+  doc,
+  getDoc,
+  collection,
+  getDocs
+} from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDk8IZ0z2OcllEvnDStMEjwA_T73XQ-kpQ",
+  authDomain: "habit-streak-21856.firebaseapp.com",
+  projectId: "habit-streak-21856",
+  storageBucket: "habit-streak-21856.firebasestorage.app",
+  messagingSenderId: "106652581729",
+  appId: "1:106652581729:web:4b4a8b23e8a68fb50d4f20",
+  measurementId: "G-76130LG7GF"
+};
+
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+const $ = id => document.getElementById(id);
+
+let users = [];
+
+
+function showStatus(message, error = false) {
+  $("status").textContent = message;
+  $("status").className =
+    error ? "status error" : "status";
+}
+
+
+function formatDate(value) {
+  if (!value) return "—";
+
+  try {
+    const date =
+      typeof value.toDate === "function"
+        ? value.toDate()
+        : new Date(value);
+
+    return Number.isNaN(date.getTime())
+      ? "—"
+      : date.toLocaleString();
+  } catch {
+    return "—";
+  }
+}
+
+
+function premiumStatus(user) {
+  const value =
+    user.isPremium ??
+    user.premiumStatus ??
+    user.is_premium;
+
+  if (
+    value === true ||
+    value === "active" ||
+    value === "premium"
+  ) {
+    return "Premium";
+  }
+
+  if (
+    value === false ||
+    value === "free" ||
+    value === "inactive"
+  ) {
+    return "Free";
+  }
+
+  return "Not configured";
+}
+
+
+function renderUsers() {
+  const search =
+    $("search").value.trim().toLowerCase();
+
+  const filtered = users.filter(({ uid, data }) => {
+    return [
+      uid,
+      data.displayName,
+      data.name,
+      data.email
+    ].some(value =>
+      String(value ?? "")
+        .toLowerCase()
+        .includes(search)
+    );
+  });
+
+  const body = $("usersBody");
+  body.replaceChildren();
+
+  if (!filtered.length) {
+    const row = document.createElement("tr");
+    const cell = document.createElement("td");
+
+    cell.colSpan = 5;
+    cell.textContent = "No matching users.";
+
+    row.appendChild(cell);
+    body.appendChild(row);
+
+    return;
+  }
+
+  for (const { uid, data } of filtered) {
+    const row = document.createElement("tr");
+
+    const values = [
+      data.displayName || data.name || "Unnamed",
+      data.email || "—",
+      uid,
+      premiumStatus(data),
+      formatDate(data.lastLoginAt)
+    ];
+
+    for (const value of values) {
+      const cell = document.createElement("td");
+      cell.textContent = String(value);
+      row.appendChild(cell);
+    }
+
+    body.appendChild(row);
+  }
+}
+
+
+async function loadUsers() {
+  showStatus("Loading user profiles...");
+
+  try {
+    const snapshot =
+      await getDocs(collection(db, "users"));
+
+    users = snapshot.docs.map(document => ({
+      uid: document.id,
+      data: document.data()
+    }));
+
+    $("totalUsers").textContent = users.length;
+
+    $("premiumUsers").textContent =
+      users.filter(({ data }) =>
+        premiumStatus(data) === "Premium"
+      ).length;
+
+    $("loginUsers").textContent =
+      users.filter(({ data }) =>
+        Boolean(data.lastLoginAt)
+      ).length;
+
+    renderUsers();
+
+    showStatus(
+      "Owner verified. Loaded " +
+      users.length +
+      " user profiles."
+    );
+
+  } catch (error) {
+    console.error(error);
+
+    showStatus(
+      "Could not load users: " +
+      (error.code || error.message) +
+      ". Check your published Firestore rules.",
+      true
+    );
+  }
+}
+
+
+$("login").addEventListener("click", async () => {
+  $("login").disabled = true;
+
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (error) {
+    showStatus(
+      "Login failed: " +
+      (error.code || error.message),
+      true
+    );
+  } finally {
+    $("login").disabled = false;
+  }
+});
+
+
+$("logout").addEventListener("click", async () => {
+  await signOut(auth);
+});
+
+
+$("refresh").addEventListener("click", loadUsers);
+
+$("search").addEventListener("input", renderUsers);
+
+
+onAuthStateChanged(auth, async user => {
+
+  $("dashboard").classList.add("hidden");
+  $("loginArea").classList.add("hidden");
+  $("logout").classList.add("hidden");
+
+  users = [];
+
+  if (!user) {
+    showStatus("Sign in with your owner Google account.");
+    $("loginArea").classList.remove("hidden");
+    return;
+  }
+
+  $("logout").classList.remove("hidden");
+
+  showStatus("Verifying owner permissions...");
+
+  try {
+    const adminDocument = await getDoc(
+      doc(db, "admins", user.uid)
+    );
+
+    if (
+      !adminDocument.exists() ||
+      adminDocument.data().role !== "owner"
+    ) {
+      showStatus(
+        "Access denied. This account is not registered as an owner.",
+        true
+      );
+
+      return;
+    }
+
+    $("dashboard").classList.remove("hidden");
+
+    await loadUsers();
+
+  } catch (error) {
+    console.error(error);
+
+    showStatus(
+      "Could not verify owner access: " +
+      (error.code || error.message),
+      true
+    );
+  }
+
+});
+
+</script>
+
+</body>
+</html>
