@@ -497,15 +497,28 @@ onAuthStateChanged(auth, async user => {
       doc(db, "admins", user.uid)
     );
 
+    const adminData = adminDocument.exists()
+      ? adminDocument.data()
+      : null;
+
+    console.log("OWNER DEBUG:", {
+      currentUID: user.uid,
+      documentExists: adminDocument.exists(),
+      roleValue: adminData?.role ?? null,
+      roleType: typeof adminData?.role
+    });
+
     if (
       !adminDocument.exists() ||
-      adminDocument.data().role !== "owner"
+      adminData?.role !== "owner"
     ) {
       showStatus(
-        "Access denied. This account is not registered as an owner.",
+        "DEBUG: UID = " + user.uid +
+        " | Document exists = " + adminDocument.exists() +
+        " | Role = " + String(adminData?.role ?? "MISSING") +
+        " | Type = " + typeof adminData?.role,
         true
       );
-
       return;
     }
 
