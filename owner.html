@@ -494,7 +494,7 @@ onAuthStateChanged(auth, async user => {
 
   try {
     const adminDocument = await getDoc(
-      doc(db, "admins", user.uid)
+      doc(db, "Admin", user.uid)
     );
 
     const adminData = adminDocument.exists()
